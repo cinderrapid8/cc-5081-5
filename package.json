@@ -1,0 +1,15 @@
+{
+  "name": "chain-reaction-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic multi-target chain reaction simulation with a replay UI",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "demo": "node scripts/demo.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
+}

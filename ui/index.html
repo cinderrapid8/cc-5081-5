@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>连锁传播实验台 · Chain Reaction Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>连锁传播实验台</h1>
+        <p>确定性多跳传播 · 传播时刻与命中时刻分离结算</p>
+      </div>
+    </div>
+    <div class="engine-badge">
+      <span class="dot"></span>
+      <span>核心引擎脱离画面运行：<code>npm test</code> / <code>npm run demo</code></span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>场景</h2>
+        <div id="scenario-list" class="scenario-list"></div>
+        <p id="scenario-desc" class="scenario-desc"></p>
+      </section>
+
+      <section class="panel">
+        <h2>选择策略</h2>
+        <div class="segmented" id="strategy-toggle">
+          <button data-strategy="distance" class="active">按距离</button>
+          <button data-strategy="lowestHp">按最低生命值</button>
+        </div>
+        <p id="tiebreak-note" class="hint"></p>
+        <label class="switch-row" id="compare-row">
+          <input type="checkbox" id="compare-toggle" />
+          <span>忽略脚本状态变化（对照运行）</span>
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>时间轴</h2>
+        <div class="transport">
+          <button id="btn-play" class="primary">播放</button>
+          <button id="btn-step" title="前进一步">单步</button>
+          <button id="btn-back" title="后退一步">后退</button>
+          <button id="btn-reset" title="回到起点">重置</button>
+        </div>
+        <label class="slider-row">
+          <span>时刻</span>
+          <input type="range" id="scrubber" min="0" max="0" value="0" step="1" />
+          <output id="tick-out">t=0</output>
+        </label>
+        <label class="slider-row">
+          <span>速度</span>
+          <input type="range" id="speed" min="0.25" max="4" value="1" step="0.25" />
+          <output id="speed-out">1.0×</output>
+        </label>
+        <label class="switch-row">
+          <input type="checkbox" id="show-rejected" checked />
+          <span>显示被拒绝的候选</span>
+        </label>
+        <label class="switch-row">
+          <input type="checkbox" id="show-labels" checked />
+          <span>显示候选原因标签</span>
+        </label>
+      </section>
+
+      <section class="panel stats">
+        <h2>本轮结算</h2>
+        <div id="stats" class="stat-grid"></div>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-head">
+        <div class="legend">
+          <span class="lg lg-ally">友方</span>
+          <span class="lg lg-enemy">敌方</span>
+          <span class="lg lg-neutral">中立</span>
+          <span class="lg lg-edge-applied">已命中</span>
+          <span class="lg lg-edge-pending">已锁定·待命中</span>
+          <span class="lg lg-edge-interrupted">命中时失效</span>
+          <span class="lg lg-reject">被拒绝候选</span>
+        </div>
+        <div class="stage-status" id="stage-status"></div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="stage"></canvas>
+        <div class="phase-banner" id="phase-banner"></div>
+      </div>
+      <div class="decision-panel">
+        <div class="decision-head">
+          <h2>传播决策</h2>
+          <span id="decision-context" class="mono"></span>
+        </div>
+        <div class="decision-body">
+          <table id="candidate-table" class="candidate-table">
+            <thead>
+              <tr>
+                <th>候选</th><th>状态</th><th>距离</th><th>HP</th><th>阵营</th><th>裁决</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="decision-empty" class="empty">当前时刻没有正在进行的传播决策。</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="logside">
+      <div class="panel log-panel">
+        <div class="decision-head">
+          <h2>事件日志</h2>
+          <span class="mono" id="log-count"></span>
+        </div>
+        <ol id="event-log" class="event-log"></ol>
+      </div>
+      <div class="panel">
+        <h2>对照结果</h2>
+        <div id="compare-result" class="compare-result">仅“移动改变选择”场景提供对照。</div>
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
