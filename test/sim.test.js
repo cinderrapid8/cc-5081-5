@@ -288,6 +288,105 @@ test('faction: the interrupted hop still consumes budget', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Fanout + target disappearance at the same time
+// ---------------------------------------------------------------------------
+
+test('vanish-fanout: a vanished branch is interrupted without refunding its budget', () => {
+  const report = run('vanish-fanout');
+  // Locked at t=1: S>E1, S>E2. E2 departs at t=3, before its t=4 hit.
+  const interrupted = report.interrupted.find((e) => e.toId === 'E2');
+  assert.ok(interrupted);
+  assert.equal(interrupted.reason, 'targetDeparted');
+  assert.equal(interrupted.damage, 0);
+  assert.equal(hpOf(report, 'E2'), 50, 'E2 keeps its hp along the stale edge');
+  // The doomed hop was already paid for at lock time.
+  assert.equal(report.summary.budgetUsed, 5);
+  assert.equal(report.summary.hopsLocked, 5);
+  assert.equal(report.summary.hopsInterrupted, 1);
+});
+
+test('vanish-fanout: the surviving branch keeps propagating while the dry branch stops', () => {
+  const report = run('vanish-fanout');
+  assert.deepEqual(hopsOf(report), [
+    'S>E1', 'S>E2', 'E1>E5', 'E1>E6', 'E5>E4',
+  ]);
+  // E1's branch exists on both sides of the split; E2 must not propagate.
+  assert.ok(report.propagations.some((p) => p.originId === 'E1' && p.chosen.length === 2));
+  assert.ok(!report.propagations.some((p) => p.originId === 'E2' && p.chosen.length > 0));
+  const aborted = report.aborted.find((e) => e.originId === 'E2');
+  assert.ok(aborted);
+  assert.equal(aborted.reason, 'originDeparted');
+  // E2's scheduled action is exactly the abort, not a second silent decision.
+  assert.equal(report.propagations.filter((p) => p.originId === 'E2').length, 0);
+});
+
+test('vanish-fanout: no target is hit twice and budget never goes negative', () => {
+  const report = run('vanish-fanout');
+  const appliedTargets = report.hits.map((h) => h.toId);
+  assert.equal(new Set(appliedTargets).size, appliedTargets.length, 'no repeated hit');
+  assert.equal(report.edges.length, report.summary.budgetUsed);
+  assert.ok(report.summary.budgetUsed <= report.summary.maxHops);
+  // E3 departed at t=3: early rows may still show notChosen, but every
+  // decision made at or after the departure must reject it as departed.
+  const departed = report.rejected.filter((r) => r.candidateId === 'E3' && r.tick >= 3);
+  assert.ok(departed.length > 0);
+  assert.ok(departed.every((r) => r.reason === REASON.DEPARTED));
+  assert.equal(hpOf(report, 'E3'), 50);
+});
+
+test('vanish-fanout: repeating the same input reproduces the same log', () => {
+  const a = run('vanish-fanout');
+  const b = run('vanish-fanout');
+  assert.deepEqual(a.summary, b.summary);
+  assert.equal(JSON.stringify(a.events), JSON.stringify(b.events));
+});
+
+test('vanish-fanout: fanout never commits more hops than the remaining budget', () => {
+  const report = run('vanish-fanout');
+  for (const prop of report.propagations) {
+    assert.ok(prop.chosen.length <= prop.budgetBefore,
+      `t=${prop.tick} @${prop.originId} committed ${prop.chosen.length} with ${prop.budgetBefore}`);
+    const marked = prop.candidates.filter((c) => c.state === 'chosen');
+    assert.equal(marked.length, prop.chosen.length,
+      'every committed hop has exactly one chosen row');
+    assert.deepEqual(marked.map((c) => c.id).sort(), [...prop.chosen].sort());
+  }
+});
+
+test('source cancellation during a fanout leaves locked hops intact and aborts later origins', () => {
+  const input = {
+    units: [
+      { id: 'S', faction: 'ally', x: 0, y: 0, hp: 60 },
+      { id: 'E1', faction: 'enemy', x: 1, y: 0, hp: 50 },
+      { id: 'E2', faction: 'enemy', x: 0, y: 1, hp: 50 },
+      { id: 'E3', faction: 'enemy', x: 2, y: 0, hp: 50 },
+      { id: 'E4', faction: 'enemy', x: 0, y: 2, hp: 50 },
+      { id: 'E5', faction: 'enemy', x: 1, y: 1, hp: 50 },
+    ],
+    cast: {
+      id: 'fx-src-cancel', sourceUnitId: 'S', strategy: 'distance', maxHops: 4, fanout: 2,
+      damage: 10, propDelayTicks: 2, hitDelayTicks: 3,
+      filters: { factions: ['enemy'], allowSource: false },
+    },
+    changes: [{ tick: 3, type: 'kill', id: 'S' }],
+  };
+  const report = buildReport(simulate(input));
+  // S's own hops were already locked; killing S does not retroactively cancel them.
+  const interrupted = report.interrupted.filter((e) => e.fromId === 'S');
+  assert.equal(interrupted.length, 2);
+  assert.ok(interrupted.every((e) => e.reason === 'originDead' && e.damage === 0));
+  // E1's propagation only re-checks E1, which is untouched. S's death cancels
+  // only hops whose origin is S, so E1>E3 and E1>E5 still land.
+  assert.deepEqual(hopsOf(report), ['S>E1', 'S>E2', 'E1>E3', 'E1>E5']);
+  assert.equal(hpOf(report, 'E1'), 50);
+  assert.equal(hpOf(report, 'E2'), 50);
+  // E2 had no budget left when it propagated; S's cancellation did not refund it.
+  assert.equal(report.summary.budgetUsed, 4);
+  const appliedTargets = report.hits.map((h) => h.toId);
+  assert.equal(new Set(appliedTargets).size, appliedTargets.length);
+});
+
+// ---------------------------------------------------------------------------
 // State changes really drive later selection
 // ---------------------------------------------------------------------------
 
@@ -363,6 +462,36 @@ test('unknown strategy is rejected loudly', () => {
     ...input,
     cast: { ...input.cast, strategy: 'nearest-ish' },
   }), /unknown strategy/);
+});
+
+test('invalid fanout cannot exceed the shared budget or desync the candidate rows', () => {
+  const input = scenarioInput(findScenario('same-distance'));
+  for (const fanout of [-2, -1, 0, 1.5]) {
+    assert.throws(() => new Simulation({
+      ...input,
+      cast: { ...input.cast, fanout },
+    }), /fanout must be a positive integer/);
+  }
+});
+
+test('invalid hop budget and delays are rejected instead of stalling the clock', () => {
+  const input = scenarioInput(findScenario('same-distance'));
+  for (const maxHops of [-1, 1.5]) {
+    assert.throws(() => new Simulation({
+      ...input,
+      cast: { ...input.cast, maxHops },
+    }), /maxHops must be a non-negative integer/);
+  }
+  for (const delay of [0, -1, 1.5]) {
+    assert.throws(() => new Simulation({
+      ...input,
+      cast: { ...input.cast, propDelayTicks: delay },
+    }), /propDelayTicks must be a positive integer/);
+    assert.throws(() => new Simulation({
+      ...input,
+      cast: { ...input.cast, hitDelayTicks: delay },
+    }), /hitDelayTicks must be a positive integer/);
+  }
 });
 
 test('world changes are recorded per tick', () => {

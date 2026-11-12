@@ -151,6 +151,18 @@ export class Simulation {
     if (!STRATEGIES.includes(effect.strategy)) {
       throw new Error(`unknown strategy: ${effect.strategy}`);
     }
+    if (!Number.isInteger(effect.fanout) || effect.fanout < 1) {
+      throw new Error(`fanout must be a positive integer: ${effect.fanout}`);
+    }
+    if (!Number.isInteger(effect.maxHops) || effect.maxHops < 0) {
+      throw new Error(`maxHops must be a non-negative integer: ${effect.maxHops}`);
+    }
+    if (!Number.isInteger(effect.propDelayTicks) || effect.propDelayTicks < 1) {
+      throw new Error(`propDelayTicks must be a positive integer: ${effect.propDelayTicks}`);
+    }
+    if (!Number.isInteger(effect.hitDelayTicks) || effect.hitDelayTicks < 1) {
+      throw new Error(`hitDelayTicks must be a positive integer: ${effect.hitDelayTicks}`);
+    }
     effect.sourceUnitId = cast.sourceUnitId;
     effect.originUnitId = cast.originUnitId ?? cast.sourceUnitId;
     const source = this.units.get(effect.sourceUnitId);

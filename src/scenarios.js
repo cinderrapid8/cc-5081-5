@@ -270,6 +270,41 @@ export const SCENARIOS = [
       changes: [],
     },
   },
+  {
+    id: 'vanish-fanout',
+    title: '分叉中目标消失',
+    description:
+      't=1 锁定 E1、E2 两支。t=3 时 E2 已离场，但它的传播动作仍会执行并终止；' +
+      'E1 这一支继续分叉出 E5、E6。t=4 结算时，S>E2 记录 targetDeparted 且伤害为 0，' +
+      '但它锁定时占用的预算不返还；E1>E5、E1>E6 正常命中。E3 在同刻离场，只会作为被拒候选出现。',
+    view: { minX: -2, maxX: 4, minY: -2, maxY: 3 },
+    scenario: {
+      units: [
+        { id: 'S', faction: 'ally', x: 0, y: 0, hp: 60 },
+        { id: 'E1', faction: 'enemy', x: 1, y: 0, hp: 50 },
+        { id: 'E2', faction: 'enemy', x: 0, y: 1, hp: 50 },
+        { id: 'E3', faction: 'enemy', x: -1, y: 0, hp: 50 },
+        { id: 'E4', faction: 'enemy', x: 0, y: -1, hp: 50 },
+        { id: 'E5', faction: 'enemy', x: 1, y: 1, hp: 50 },
+        { id: 'E6', faction: 'enemy', x: 2, y: 0, hp: 50 },
+      ],
+      cast: {
+        id: 'fx-vanish-fanout',
+        sourceUnitId: 'S',
+        strategy: 'distance',
+        maxHops: 5,
+        fanout: 2,
+        damage: 10,
+        propDelayTicks: 2,
+        hitDelayTicks: 3,
+        filters: { factions: ['enemy'], allowSource: false },
+      },
+      changes: [
+        { tick: 3, type: 'depart', id: 'E2' },
+        { tick: 3, type: 'depart', id: 'E3' },
+      ],
+    },
+  },
 ];
 
 export function findScenario(id) {

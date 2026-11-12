@@ -3,7 +3,7 @@
 确定性、可复现的多跳连锁传播实验台。核心结算引擎不依赖 DOM、不依赖画面，可以单独运行、单独测试；界面只负责回放引擎产出的**真实事件日志**。
 
 ```bash
-npm test                                  # 34 个引擎/回放测试
+npm test                                  # 43 个引擎/回放测试
 npm run demo                              # 全部场景，纯终端输出
 npm run demo -- vanish movement           # 指定场景（movement 自动附对照运行）
 npm run demo -- same-distance --strategy=lowestHp
@@ -84,6 +84,7 @@ t=4  hit        S -> E1        -10 hp 50->40
 - 所有分支共享**同一份总预算** `maxHops`，以“锁定”计费；被中断的跳**照样计入消耗**（选择已经发生）。
 - 预算归零时并非静默停止：仍会产生一条终局的传播决策，把当时的真实候选全部标为“预算不足”，并记录 `budgetExhausted`。
 - 每个效果的所有子链事件都带同一个 `sourceEventId`（施法事件的 id），可以回溯到唯一的源事件。
+- `fanout` / `maxHops` / `propDelayTicks` / `hitDelayTicks` 在构造时校验为正整数（`maxHops` 允许 0）。非法值直接抛错，避免 `slice` 的负索引语义让锁定数超过预算、或零延迟造成不收敛的调度环。
 
 ## 界面
 
@@ -113,6 +114,7 @@ t=4  hit        S -> E1        -10 hp 50->40
 | `movement` | 移动改变下一跳，并提供对照运行 |
 | `faction-switch` | 命中前阵营改变：`targetFactionChanged` + 传播中止 |
 | `fanout` | 分叉共享预算，子链共同源事件 |
+| `vanish-fanout` | 分叉中一支目标在命中前离场：中断跳照计预算，失效分支中止，幸存分支继续 |
 
 ## 结构
 
